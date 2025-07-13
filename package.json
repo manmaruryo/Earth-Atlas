@@ -1,0 +1,18 @@
+{
+  "name": "globe-life-memo",
+  "version": "1.0.0",
+  "description": "A globe-based web app for location-based memos",
+  "main": "index.html",
+  "scripts": {
+    "start": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "three": "^0.150.1",
+    "leaflet": "^1.9.4"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

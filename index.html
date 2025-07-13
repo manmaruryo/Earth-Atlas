@@ -1,0 +1,1092 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Globe Life Memo</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <style>
+        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; }
+        #container { position: relative; width: 100vw; height: 100vh; }
+        #globe-view { position: absolute; width: 100%; height: 100%; transition: opacity 0.5s ease-in-out; }
+        #map-view { width: 100vw; height: 100vh; display: none; transition: opacity 0.5s ease-in-out; }
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(255,255,255,0.9);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        #memo-panel {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 300px;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            display: none;
+        }
+        #memo-list {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 300px;
+            max-height: 70vh;
+            overflow-y: auto;
+            background: rgba(255,255,255,0.9);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 999;
+        }
+        .category-btn {
+            margin: 5px;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            opacity: 0.7;
+        }
+        .category-btn.selected {
+            opacity: 1;
+            transform: scale(1.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .category-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.05);
+        }
+        .daily { background: #FFB6C1; }
+        .travel { background: #98FB98; }
+        .shopping { background: #87CEEB; }
+        .memo-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .memo-item:hover {
+            transform: translateX(-5px);
+        }
+        .memo-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .memo-location {
+            font-size: 0.8em;
+            color: #666;
+        }
+        #current-location-btn {
+            position: absolute;
+            right: 30px;
+            bottom: 30px;
+            z-index: 1200;
+            background: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: box-shadow 0.2s;
+        }
+        #current-location-btn:hover {
+            box-shadow: 0 4px 16px rgba(66,133,244,0.25);
+        }
+        #current-location-btn svg {
+            width: 28px;
+            height: 28px;
+            fill: #4285F4;
+        }
+        /* --- Hamburger Menu --- */
+        #hamburger-btn {
+            position: absolute;
+            top: 24px;
+            left: 24px;
+            z-index: 3001;
+            width: 44px;
+            height: 44px;
+            background: rgba(30,40,60,0.7);
+            border: none;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(80,180,255,0.18);
+            transition: background 0.2s;
+        }
+        #hamburger-btn:hover { background: rgba(80,180,255,0.18); }
+        #hamburger-btn .bar {
+            width: 26px; height: 3px; background: #7fd6ff; margin: 3px 0; border-radius: 2px;
+            transition: all 0.3s;
+        }
+        /* --- Side Menu --- */
+        #side-menu {
+            position: fixed;
+            top: 0; left: 0; bottom: 0;
+            width: 320px;
+            background: rgba(20,30,50,0.97);
+            box-shadow: 2px 0 24px 0 rgba(80,180,255,0.18);
+            z-index: 3000;
+            transform: translateX(-100%);
+            transition: transform 0.4s cubic-bezier(.77,0,.18,1);
+            display: flex;
+            flex-direction: column;
+        }
+        #side-menu.open { transform: translateX(0); }
+        #side-menu-header {
+            height: 32px;
+            border-bottom: 1px solid rgba(80,180,255,0.10);
+        }
+        #file-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px 0 0 0;
+        }
+        .file-item {
+            padding: 12px 28px;
+            color: #fff;
+            font-size: 1.1em;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+            transition: background 0.2s, border 0.2s;
+        }
+        .file-item.selected {
+            background: rgba(80,180,255,0.13);
+            border-left: 4px solid #7fd6ff;
+            color: #7fd6ff;
+        }
+        #add-file-btn {
+            margin: 18px 24px 12px 24px;
+            padding: 10px 0;
+            background: linear-gradient(90deg,#7fd6ff 0%,#3a8fff 100%);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(80,180,255,0.18);
+        }
+        /* #side-menu-footer { display: none; } */
+        /* --- Cockpit Instrument Buttons --- */
+        .cockpit-instrument-btn {
+            background: linear-gradient(90deg,#7fd6ff 0%,#3a8fff 100%);
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 54px;
+            height: 54px;
+            box-shadow: 0 2px 8px rgba(80,180,255,0.18);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.3em;
+            margin: 0 10px;
+            transition: box-shadow 0.2s;
+        }
+        .cockpit-instrument-btn:hover {
+            box-shadow: 0 4px 16px rgba(80,180,255,0.25);
+        }
+        /* --- HUD Overlay (optional) --- */
+        #hud-overlay {
+            pointer-events: none;
+            position: fixed;
+            left: 0; top: 0; width: 100vw; height: 100vh;
+            z-index: 2100;
+            background: radial-gradient(ellipse at 50% 60%,rgba(80,180,255,0.07) 0%,rgba(0,0,0,0.0) 80%);
+        }
+  </style>
+</head>
+<body>
+    <div id="container">
+        <button id="hamburger-btn" title="メニュー">
+            <div class="bar"></div>
+            <div class="bar"></div>
+            <div class="bar"></div>
+        </button>
+        <div id="side-menu">
+            <div id="side-menu-header" style="height:32px;"></div>
+            <div id="file-list"></div>
+            <button id="add-file-btn">＋ 新しいファイル</button>
+        </div>
+        <div id="globe-view"></div>
+        <div id="map-view"></div>
+        <div id="controls">
+            <button id="add-memo-btn" style="position:fixed;bottom:32px;left:50%;transform:translateX(-50%);z-index:1201;background:#fff;border-radius:24px;padding:12px 32px;font-size:1.1em;font-weight:bold;box-shadow:0 2px 8px rgba(0,0,0,0.12);border:none;cursor:pointer;">＋ メモを追加</button>
+        </div>
+        <div id="memo-panel">
+            <h3 style="margin-bottom:12px;font-size:1.2em;">メモを追加</h3>
+            <input type="text" id="memo-title" placeholder="タイトル" style="width:100%;margin-bottom:10px;padding:8px 10px;font-size:1em;border-radius:8px;border:1px solid #ddd;" autocomplete="off">
+            <textarea id="memo-content" placeholder="メモ内容（任意）" style="width:100%;height:80px;margin-bottom:10px;padding:8px 10px;font-size:1em;border-radius:8px;border:1px solid #ddd;" autocomplete="off"></textarea>
+            <div style="text-align:right;">
+                <button onclick="saveMemo()" style="background:#007aff;color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:1em;font-weight:bold;margin-right:8px;">保存</button>
+                <button onclick="cancelMemo()" style="background:#eee;color:#333;border:none;border-radius:8px;padding:8px 18px;font-size:1em;">キャンセル</button>
+            </div>
+        </div>
+        <div id="memo-list"></div>
+        <button id="current-location-btn" title="現在地に移動" style="right:32px;bottom:32px;left:auto;top:auto;">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="#4285F4" opacity="0.2"/><path d="M12 2v2m0 16v2m10-10h-2M4 12H2m15.07-7.07l-1.41 1.41M6.34 17.66l-1.41 1.41m12.02 0l-1.41-1.41M6.34 6.34L4.93 4.93" stroke="#fff" stroke-width="2" stroke-linecap="round" fill="none"/><circle cx="12" cy="12" r="3" fill="#fff"/></svg>
+        </button>
+    </div>
+
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.150.1/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/"
+        }
+    }
+    </script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // Three.js setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
+    document.getElementById('globe-view').appendChild(renderer.domElement);
+
+        // Disable right-click context menu on globe
+        renderer.domElement.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+        });
+
+        // --- 星屑（Starfield） ---
+        function createStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 2500;
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            const sizes = new Float32Array(starCount);
+            for (let i = 0; i < starCount; i++) {
+                // 球全体に星を分布
+                const r = 80 + Math.random() * 40;
+                const theta = Math.random() * 2 * Math.PI;
+                const phi = Math.acos(2 * Math.random() - 1); // -1～1で全方位
+                positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+                positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+                positions[i * 3 + 2] = r * Math.cos(phi);
+                // パステル調の淡い色
+                const colorChoices = [
+                    [1.0, 1.0, 1.0], // 白
+                    [0.85, 0.95, 1.0], // パステル青
+                    [1.0, 0.95, 0.85], // パステル黄
+                    [1.0, 0.9, 1.0],   // パステルピンク
+                    [0.9, 1.0, 0.95]   // パステルグリーン
+                ];
+                const color = colorChoices[Math.floor(Math.random() * colorChoices.length)];
+                colors[i * 3] = color[0];
+                colors[i * 3 + 1] = color[1];
+                colors[i * 3 + 2] = color[2];
+                // サイズも控えめ
+                sizes[i] = 0.7 + Math.random() * 1.2;
+            }
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            starGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            // チカチカをほぼ無しにしたシェーダー
+            const starMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    time: { value: 0 }
+                },
+                vertexShader: `
+                    attribute float size;
+                    attribute vec3 color;
+                    varying vec3 vColor;
+                    varying float vAlpha;
+                    uniform float time;
+                    void main() {
+                        vColor = color;
+                        // チカチカを極小に
+                        float twinkle = 0.95 + 0.05 * sin(time * 0.5 + position.x * 20.0 + position.y * 10.0);
+                        vAlpha = twinkle * 0.5 + 0.2;
+                        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                        gl_PointSize = size * (300.0 / -mvPosition.z);
+                        gl_Position = projectionMatrix * mvPosition;
+                    }
+                `,
+                fragmentShader: `
+                    varying vec3 vColor;
+                    varying float vAlpha;
+                    void main() {
+                        float distance = length(gl_PointCoord - vec2(0.5));
+                        if (distance > 0.5) discard;
+                        float star = 1.0 - smoothstep(0.0, 0.5, distance);
+                        star = pow(star, 2.0);
+                        gl_FragColor = vec4(vColor, vAlpha * star * 0.7); // さらに淡く
+                    }
+                `,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            const stars = new THREE.Points(starGeometry, starMaterial);
+            stars.userData = { material: starMaterial };
+            scene.add(stars);
+            return stars;
+        }
+        const stars = createStars();
+
+        // Earth setup
+        const earthGeometry = new THREE.SphereGeometry(1, 96, 96);
+        const textureLoader = new THREE.TextureLoader();
+        
+        // ローカルファイルの地球テクスチャを使用
+        const earthTexture = textureLoader.load('2k_earth_daymap.jpg');
+        const nightTexture = textureLoader.load('2k_earth_nightmap.jpg');
+        earthTexture.encoding = THREE.sRGBEncoding;
+        nightTexture.encoding = THREE.sRGBEncoding;
+        
+        // 地球のマテリアルを明るく設定
+        const earthMaterial = new THREE.MeshPhongMaterial({
+            map: earthTexture,
+            shininess: 5
+        });
+        const earth = new THREE.Mesh(earthGeometry, earthMaterial);
+        scene.add(earth);
+        
+        // 雲テクスチャもローカルファイルを使用
+        const cloudTexture = textureLoader.load('2k_earth_clouds.jpg');
+        const cloudMaterial = new THREE.MeshBasicMaterial({
+            map: cloudTexture,
+            transparent: true,
+            opacity: 0.4
+        });
+        const clouds = new THREE.Mesh(
+            new THREE.SphereGeometry(1.01, 96, 96),
+            cloudMaterial
+        );
+        scene.add(clouds);
+        // ライティングを明るく設定
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+        scene.add(ambientLight);
+        
+        // メインライト（太陽光）
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+        dirLight.position.set(5, 3, 5);
+        scene.add(dirLight);
+        
+        // フィルライト（影を柔らかく）
+        const fillLight = new THREE.DirectionalLight(0xffffff, 0.6);
+        fillLight.position.set(-3, 2, -3);
+        scene.add(fillLight);
+        
+        // 追加の環境光
+        const extraAmbient = new THREE.AmbientLight(0x404040, 0.3);
+        scene.add(extraAmbient);
+
+        // --- かわいいオーラ効果 ---
+        const auraGeometry = new THREE.SphereGeometry(1.08, 64, 64);
+        const auraMaterial = new THREE.MeshBasicMaterial({
+            color: 0xaeefff,
+            transparent: true,
+            opacity: 0.15,
+            side: THREE.BackSide
+        });
+        const aura = new THREE.Mesh(auraGeometry, auraMaterial);
+        scene.add(aura);
+
+        // --- 動く光の粒（スパークル） ---
+        const sparkles = [];
+        const sparkleGeometry = new THREE.SphereGeometry(0.008, 8, 8);
+        const sparkleMaterial = new THREE.MeshBasicMaterial({ 
+            color: 0xffff88,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        for (let i = 0; i < 15; i++) {
+            const sparkle = new THREE.Mesh(sparkleGeometry, sparkleMaterial);
+            sparkle.userData = {
+                angle: Math.random() * Math.PI * 2,
+                radius: 1.2 + Math.random() * 0.3,
+                speed: 0.5 + Math.random() * 0.5,
+                opacity: 0.3 + Math.random() * 0.7
+            };
+            sparkles.push(sparkle);
+            scene.add(sparkle);
+        }
+
+        // --- 虹色のオーラ（時々現れる） ---
+        const rainbowGeometry = new THREE.SphereGeometry(1.12, 64, 64);
+        const rainbowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff88ff,
+            transparent: true,
+            opacity: 0,
+            side: THREE.BackSide
+        });
+        const rainbowAura = new THREE.Mesh(rainbowGeometry, rainbowMaterial);
+        scene.add(rainbowAura);
+        
+        let rainbowTimer = 0;
+        let rainbowActive = false;
+
+        // 大気効果
+        const atmosphereGeometry = new THREE.SphereGeometry(1.05, 64, 64);
+        const atmosphereMaterial = new THREE.MeshPhongMaterial({
+            color: 0x3399ff,
+            transparent: true,
+            opacity: 0.05,
+            side: THREE.BackSide
+        });
+        const atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        scene.add(atmosphere);
+
+        // Camera position
+        camera.position.z = 3;
+
+        // Controls
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+        controls.minDistance = 2;
+        controls.maxDistance = 5;
+        controls.target.set(0, 0, 0);
+        controls.update();
+
+        // --- 切替クールダウン管理 ---
+        let lastMapSwitch = 0;
+        const MAP_SWITCH_COOLDOWN = 1000; // ms
+
+        // Add zoom level detection
+        let lastZoomLevel = controls.getDistance();
+        let isTransitioning = false;
+        controls.addEventListener('change', () => {
+            const currentZoom = controls.getDistance();
+            const now = Date.now();
+            // If zoomed in close enough (less than 2.2 units from Earth)
+            if (currentZoom < 2.2 && lastZoomLevel >= 2.2) {
+                if (currentView === 'globe' && !isTransitioning) {
+                    isTransitioning = true;
+                    toggleView();
+                    setTimeout(() => {
+                        isTransitioning = false;
+                    }, 500);
+                }
+            }
+            // If zoomed out far enough (more than 2.2 units from Earth)
+            else if (currentZoom > 2.2 && lastZoomLevel <= 2.2) {
+                if (currentView === 'map' && !isTransitioning && (now - lastMapSwitch > MAP_SWITCH_COOLDOWN)) {
+                    isTransitioning = true;
+                    toggleView();
+                    setTimeout(() => {
+                        isTransitioning = false;
+                    }, 500);
+                }
+            }
+            lastZoomLevel = currentZoom;
+        });
+
+        // Animation
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      
+      // --- 星のキラキラ効果を更新 ---
+      stars.userData.material.uniforms.time.value += 0.008; // ゆっくり
+      
+      // --- 雲の回転 ---
+      clouds.rotation.y += 0.0002; // 少し速く
+      // --- 地球本体も自転 ---
+      earth.rotation.y += 0.0001;
+      
+      // --- スパークルの動き ---
+      sparkles.forEach((sparkle, i) => {
+          const data = sparkle.userData;
+          data.angle += data.speed * 0.01;
+          
+          const x = Math.cos(data.angle) * data.radius;
+          const z = Math.sin(data.angle) * data.radius;
+          const y = Math.sin(data.angle * 2) * 0.3;
+          
+          sparkle.position.set(x, y, z);
+          sparkle.material.opacity = data.opacity * (0.5 + 0.5 * Math.sin(Date.now() * 0.003 + i));
+      });
+      
+      // --- 虹色オーラのタイマー ---
+      rainbowTimer += 0.016;
+      if (rainbowTimer > 300 && !rainbowActive) { // 5秒ごとに虹色オーラ
+          rainbowActive = true;
+          rainbowTimer = 0;
+          rainbowAura.material.opacity = 0.3;
+          setTimeout(() => {
+              rainbowAura.material.opacity = 0;
+              rainbowActive = false;
+          }, 2000);
+      }
+      
+      // --- オーラのきらめき ---
+      aura.material.opacity = 0.15 + 0.05 * Math.sin(Date.now() * 0.002);
+      
+      renderer.render(scene, camera);
+    }
+    animate();
+
+        // Global variables
+        let currentView = 'globe';
+        let markers = [];
+        let map;
+        let memos = [];
+        let selectedCategory = null;
+        let currentPosition = null;
+
+        // View toggle function
+        window.toggleView = function() {
+            if (currentView === 'globe') {
+                document.getElementById('globe-view').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('globe-view').style.display = 'none';
+                    document.getElementById('map-view').style.display = 'block';
+                    map.invalidateSize();
+                    requestAnimationFrame(() => {
+                        document.getElementById('map-view').style.opacity = '1';
+                    });
+                }, 500);
+                currentView = 'map';
+                lastMapSwitch = Date.now();
+            } else {
+                document.getElementById('map-view').style.opacity = '0';
+                setTimeout(() => {
+                    document.getElementById('map-view').style.display = 'none';
+                    document.getElementById('globe-view').style.display = 'block';
+                    requestAnimationFrame(() => {
+                        document.getElementById('globe-view').style.opacity = '1';
+                    });
+                }, 500);
+                currentView = 'globe';
+                lastMapSwitch = Date.now();
+            }
+        };
+
+        // Category selection
+        window.setCategory = function(category) {
+            // Remove selected class from all buttons
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked button
+            document.querySelector(`.category-btn.${category}`).classList.add('selected');
+            
+            selectedCategory = category;
+            document.getElementById('selected-category').textContent = 
+                category === 'daily' ? '日常' :
+                category === 'travel' ? '旅行' :
+                category === 'shopping' ? '買物' : '未選択';
+        };
+
+        // Add current location
+        window.addCurrentLocation = function() {
+            if (!selectedCategory) {
+                alert('先にカテゴリを選択してください');
+                return;
+            }
+            document.getElementById('memo-list').style.display = 'none';
+            document.getElementById('memo-panel').style.display = 'block';
+        };
+
+        window.cancelMemo = function() {
+            document.getElementById('memo-panel').style.display = 'none';
+            document.getElementById('memo-list').style.display = 'block';
+            document.getElementById('memo-title').value = '';
+            document.getElementById('memo-content').value = '';
+        };
+
+        // 位置情報を取得する関数
+        function getCurrentLocation() {
+            return new Promise((resolve, reject) => {
+                if (!navigator.geolocation) {
+                    // サンプル座標（東京駅）
+                    resolve({ lat: 35.6814, lng: 139.7670, accuracy: 10000 });
+                    return;
+                }
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 3000, // タイムアウトを3秒に短縮
+                    maximumAge: 0
+                };
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude, accuracy } = position.coords;
+                        console.log('保存用位置情報の精度:', accuracy, 'メートル');
+                        resolve({
+                            lat: latitude,
+                            lng: longitude,
+                            accuracy: accuracy
+                        });
+                    },
+                    (error) => {
+                        // サンプル座標（東京駅）
+                        resolve({ lat: 35.6814, lng: 139.7670, accuracy: 10000 });
+                    },
+                    options
+                );
+            });
+        }
+
+        // メモを保存する関数
+        async function saveMemo() {
+            document.getElementById('memo-panel').style.display = 'none';
+            document.getElementById('memo-list').style.display = 'block';
+            const title = document.getElementById('memo-title').value;
+            const content = document.getElementById('memo-content').value;
+            document.getElementById('memo-title').value = '';
+            document.getElementById('memo-content').value = '';
+            try {
+                if (!title) {
+                    return;
+                }
+                getCurrentLocation().then(location => {
+                    if (!location || (location.lat === 35.6814 && location.lng === 139.7670 && location.accuracy === 10000)) {
+                        alert('位置情報が取得できませんでした。位置情報の利用を許可してください。');
+                        return;
+                    }
+                    const memo = {
+                        id: Date.now(),
+                        title,
+                        content,
+                        location,
+                        timestamp: new Date().toISOString(),
+                        fileId: selectedFileId
+                    };
+                    memos.push(memo);
+                    localStorage.setItem('globeMemos', JSON.stringify(memos));
+                    updateMemoList();
+                    alert('メモを保存しました！');
+                });
+            } catch (error) {
+                console.error('メモの保存に失敗:', error);
+            }
+        }
+        window.saveMemo = saveMemo;
+
+        // Globe focus function
+        function focusGlobeOnLocation(lat, lng) {
+            const phi = (90 - lat) * (Math.PI / 180);
+            const theta = (lng + 180) * (Math.PI / 180);
+            const radius = 3; // カメラの距離
+            const surfaceRadius = 1.01; // 地球表面（雲の外側）
+            // カメラの新しい位置
+            const x = radius * Math.sin(phi) * Math.cos(theta);
+            const y = radius * Math.cos(phi);
+            const z = radius * Math.sin(phi) * Math.sin(theta);
+            // 現在地の地球表面座標
+            const tx = surfaceRadius * Math.sin(phi) * Math.cos(theta);
+            const ty = surfaceRadius * Math.cos(phi);
+            const tz = surfaceRadius * Math.sin(phi) * Math.sin(theta);
+            // カメラを現在地の方向に移動
+            camera.position.set(x, y, z);
+            camera.lookAt(tx, ty, tz);
+            // コントロールのターゲットも現在地に
+            controls.target.set(tx, ty, tz);
+            controls.update();
+        }
+
+        // Update memo list with improved click handling
+        function updateMemoList() {
+            const memoList = document.getElementById('memo-list');
+            memoList.innerHTML = '<h3>記録した場所</h3>';
+            
+            memos.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .forEach((memo, idx) => {
+                    const memoDiv = document.createElement('div');
+                    memoDiv.className = `memo-item ${memo.category}`;
+                    memoDiv.style.position = 'relative';
+                    let locationHtml = '';
+                    if (memo.location) {
+                        locationHtml = `<div class="memo-location">
+                            <a href="https://www.google.com/maps/search/?api=1&query=${memo.location.lat},${memo.location.lng}&zoom=15" target="_blank">
+                                Google Mapsで見る
+                            </a>
+                        </div>`;
+                    } else {
+                        locationHtml = '<div class="memo-location">位置情報未取得</div>';
+                    }
+                    memoDiv.innerHTML = `
+                        <button class="delete-memo-btn" style="position:absolute;top:8px;right:8px;z-index:2;padding:2px 8px;font-size:0.9em;">削除</button>
+                        <div class="memo-title">${memo.title}</div>
+                        ${memo.content ? `<div class="memo-content">${memo.content}</div>` : ''}
+                        ${locationHtml}
+                    `;
+                    memoDiv.querySelector('.delete-memo-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        const idxInMemos = memos.findIndex(m => m.id === memo.id);
+                        if (idxInMemos !== -1) {
+                            memos.splice(idxInMemos, 1);
+                            localStorage.setItem('globeMemos', JSON.stringify(memos));
+                            updateMemoList();
+                            if (typeof updateMapMarkers === 'function') updateMapMarkers();
+                        }
+                    };
+                    memoDiv.onclick = () => {
+                        if (memo.location && currentView === 'map') {
+                            map.flyTo({
+                                center: [memo.location.lat, memo.location.lng],
+                                zoom: 15
+                            });
+                        } else if (memo.location) {
+                            focusGlobeOnLocation(memo.location.lat, memo.location.lng);
+                        }
+                    };
+                    memoList.appendChild(memoDiv);
+                });
+        }
+
+        // Load saved memos from localStorage
+        const savedMemos = localStorage.getItem('globeMemos');
+        if (savedMemos) {
+            memos = JSON.parse(savedMemos).filter(memo =>
+                memo.location &&
+                typeof memo.location.lat === 'number' &&
+                typeof memo.location.lng === 'number' &&
+                !isNaN(memo.location.lat) &&
+                !isNaN(memo.location.lng)
+            );
+            memos.forEach(memo => {
+                addMarkerToMap(memo);
+            });
+            updateMemoList();
+        }
+
+        // Remove LINE share function
+        window.shareLine = undefined;
+
+        // Marker functions
+        function addMarkerToMap(memo) {
+            if (!map) return;
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            const marker = L.marker([memo.location.lat, memo.location.lng], {
+                title: memo.title
+            }).addTo(map);
+            marker.bindPopup(
+                `<h3>${memo.title}</h3>
+                ${memo.content ? `<p>${memo.content}</p>` : ''}
+                <p>カテゴリ: ${
+                    memo.category === 'daily' ? '日常' :
+                    memo.category === 'travel' ? '旅行' :
+                    memo.category === 'shopping' ? '買物' : memo.category
+                }</p>`
+            );
+            markers.push(marker);
+        }
+
+        // --- Leaflet.js + OSM ---
+        function initLeafletMap() {
+            // 現在地が取得できている場合は現在地を初期位置に、そうでなければ東京
+            let initialLat = 35.6814;
+            let initialLng = 139.7670;
+            let initialZoom = 13;
+            
+            // 現在地を取得して初期位置に設定
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const { latitude, longitude } = position.coords;
+                        initialLat = latitude;
+                        initialLng = longitude;
+                        initialZoom = 16;
+                        // マップを現在地で初期化
+                        if (map) {
+                            map.setView([initialLat, initialLng], initialZoom);
+                        }
+                    },
+                    (error) => {
+                        console.log('初期位置の取得に失敗、東京をデフォルトにします');
+                    },
+                    { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+                );
+            }
+            
+            map = L.map('map-view', { minZoom: 2 }).setView([initialLat, initialLng], initialZoom);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+
+            // 現在地マーカーの設定
+            let currentLocationMarker = null;
+            let accuracyCircle = null;
+
+            // 高精度な現在地の取得と表示
+            function updateCurrentLocation(position) {
+                const { latitude, longitude, accuracy } = position.coords;
+                // マーカーが存在しない場合は新規作成
+                if (!currentLocationMarker) {
+                    const currentLocationIcon = L.divIcon({
+                        className: 'current-location-marker',
+                        html: '<div style="background-color: #4285F4; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 4px rgba(0,0,0,0.3);"></div>',
+                        iconSize: [16, 16],
+                        iconAnchor: [8, 8]
+                    });
+                    currentLocationMarker = L.marker([latitude, longitude], {
+                        icon: currentLocationIcon,
+                        zIndexOffset: 1000
+                    }).addTo(map);
+                } else {
+                    currentLocationMarker.setLatLng([latitude, longitude]);
+                }
+                if (accuracyCircle) {
+                    accuracyCircle.setLatLng([latitude, longitude]);
+                    accuracyCircle.setRadius(accuracy);
+                } else {
+                    accuracyCircle = L.circle([latitude, longitude], {
+                        radius: accuracy,
+                        color: '#4285F4',
+                        fillColor: '#4285F4',
+                        fillOpacity: 0.1,
+                        weight: 1
+                    }).addTo(map);
+                }
+                // 地球儀にもピンを表示
+                showGlobeCurrentLocation(latitude, longitude);
+            }
+            window.updateCurrentLocation = updateCurrentLocation;
+
+            // 位置情報の監視を開始
+            if (navigator.geolocation) {
+                const watchId = navigator.geolocation.watchPosition(
+                    updateCurrentLocation,
+                    (error) => {
+                        console.error('位置情報の取得に失敗:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            }
+
+            // マップのズーム変更を監視
+            let lastMapZoom = map.getZoom();
+            map.on('zoomend', function() {
+                const currentZoom = map.getZoom();
+                // 縮小（ズームアウト）した場合のみ地球儀に戻す
+                if (currentZoom <= 3 && currentView === 'map' && currentZoom < lastMapZoom) {
+                    toggleView();
+                    camera.position.z = 3;
+                    controls.target.set(0, 0, 0);
+                    controls.update();
+                }
+                lastMapZoom = currentZoom;
+            });
+        }
+        initLeafletMap();
+
+        // Window resize handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+            map.invalidateSize();
+        });
+
+        // コーン（ConeGeometry）をすべて削除
+        scene.children
+          .filter(obj => obj.type === 'Mesh' && obj.geometry && obj.geometry.type === 'ConeGeometry')
+          .forEach(obj => scene.remove(obj));
+
+        // --- Three.js 現在地ピン管理 ---
+        let globeCurrentLocationMarker = null;
+        function showGlobeCurrentLocation(lat, lng) {}
+
+        // --- 現在地ボタンの動作 ---
+        document.getElementById('current-location-btn').onclick = async function() {
+            if (!navigator.geolocation) {
+                alert('このブラウザは位置情報取得に対応していません');
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const { latitude, longitude, accuracy } = position.coords;
+                    // 地球儀の現在地マークは非表示（消す）
+                    if (typeof globeCurrentLocationMarker !== 'undefined' && globeCurrentLocationMarker) {
+                        globeCurrentLocationMarker.visible = false;
+                    }
+                    // 地図モードの場合
+                    if (currentView === 'map') {
+                        map.setView([latitude, longitude], 16, { animate: true });
+                    } else if (currentView === 'globe') {
+                        // 地球儀モードの場合は地図モードに切り替えてから現在地に移動
+                        toggleView();
+                        setTimeout(() => {
+                            map.setView([latitude, longitude], 16, { animate: true });
+                        }, 600); // アニメーション切り替え後に移動
+                    }
+                },
+                (error) => {
+                    alert('現在地の取得に失敗しました');
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        };
+
+        // --- Cockpit Menu State ---
+        let files = JSON.parse(localStorage.getItem('cockpitFiles') || '[{"id":1,"name":"メインファイル"}]');
+        let selectedFileId = files[0].id;
+        // ファイル切り替え時にselectedFileIdを必ず更新
+        function renderFileList() {
+            const fileList = document.getElementById('file-list');
+            fileList.innerHTML = '';
+            files.forEach(file => {
+                const div = document.createElement('div');
+                div.className = 'file-item' + (file.id === selectedFileId ? ' selected' : '');
+                div.textContent = file.name;
+                div.onclick = () => {
+                    selectedFileId = file.id;
+                    localStorage.setItem('cockpitSelectedFile', selectedFileId);
+                    renderFileList();
+                    updateMemoList();
+                };
+                fileList.appendChild(div);
+            });
+        }
+        document.getElementById('add-file-btn').onclick = () => {
+            const name = prompt('新しいファイル名を入力してください');
+            if (name) {
+                const newFile = { id: Date.now(), name };
+                files.push(newFile);
+                localStorage.setItem('cockpitFiles', JSON.stringify(files));
+                selectedFileId = newFile.id;
+                localStorage.setItem('cockpitSelectedFile', selectedFileId);
+                renderFileList();
+                updateMemoList();
+            }
+        };
+        // --- Hamburger menu open/close ---
+        const hamburgerBtn = document.getElementById('hamburger-btn');
+        const sideMenu = document.getElementById('side-menu');
+        hamburgerBtn.onclick = () => {
+            sideMenu.classList.toggle('open');
+        };
+        // --- Memo grouping by file ---
+        function getCurrentFileId() {
+            return selectedFileId;
+        }
+        // --- Override updateMemoList to filter by file ---
+        const origUpdateMemoList = updateMemoList;
+        updateMemoList = function() {
+            const memoList = document.getElementById('memo-list');
+            memoList.innerHTML = '<h3>記録した場所</h3>';
+            memos.filter(memo => memo.fileId === getCurrentFileId())
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .forEach((memo, idx) => {
+                    const memoDiv = document.createElement('div');
+                    memoDiv.className = `memo-item ${memo.category}`;
+                    memoDiv.style.position = 'relative';
+                    let locationHtml = '';
+                    if (memo.location) {
+                        locationHtml = `<div class="memo-location">
+                            <a href="https://www.google.com/maps/search/?api=1&query=${memo.location.lat},${memo.location.lng}&zoom=15" target="_blank">
+                                Google Mapsで見る
+                            </a>
+                        </div>`;
+                    } else {
+                        locationHtml = '<div class="memo-location">位置情報未取得</div>';
+                    }
+                    memoDiv.innerHTML = `
+                        <button class="delete-memo-btn" style="position:absolute;top:8px;right:8px;z-index:2;padding:2px 8px;font-size:0.9em;">削除</button>
+                        <div class="memo-title">${memo.title}</div>
+                        ${memo.content ? `<div class="memo-content">${memo.content}</div>` : ''}
+                        ${locationHtml}
+                    `;
+                    memoDiv.querySelector('.delete-memo-btn').onclick = (e) => {
+                        e.stopPropagation();
+                        const idxInMemos = memos.findIndex(m => m.id === memo.id);
+                        if (idxInMemos !== -1) {
+                            memos.splice(idxInMemos, 1);
+                            localStorage.setItem('globeMemos', JSON.stringify(memos));
+                            updateMemoList();
+                            if (typeof updateMapMarkers === 'function') updateMapMarkers();
+                        }
+                    };
+                    memoDiv.onclick = () => {
+                        if (memo.location && currentView === 'map') {
+                            map.flyTo({
+                                center: [memo.location.lat, memo.location.lng],
+                                zoom: 15
+                            });
+                        } else if (memo.location) {
+                            focusGlobeOnLocation(memo.location.lat, memo.location.lng);
+                        }
+                    };
+                    memoList.appendChild(memoDiv);
+                });
+        };
+        // --- Load files and selected file on startup ---
+        if (localStorage.getItem('cockpitFiles')) {
+            files = JSON.parse(localStorage.getItem('cockpitFiles'));
+        }
+        if (localStorage.getItem('cockpitSelectedFile')) {
+            selectedFileId = Number(localStorage.getItem('cockpitSelectedFile'));
+        }
+        renderFileList();
+
+        // Remove cockpit frame overlay and HUD overlay if present
+        document.querySelectorAll('.cockpit-frame, #hud-overlay').forEach(e => e.remove());
+
+        // Add memo button event
+        document.getElementById('add-memo-btn').onclick = function() {
+            document.getElementById('memo-panel').style.display = 'block';
+            document.getElementById('memo-list').style.display = 'none';
+        };
+
+        // Make sure memo panel is centered and not overlapping
+        document.getElementById('memo-panel').style.position = 'fixed';
+        document.getElementById('memo-panel').style.left = '50%';
+        document.getElementById('memo-panel').style.top = '50%';
+        document.getElementById('memo-panel').style.transform = 'translate(-50%,-50%)';
+        document.getElementById('memo-panel').style.zIndex = '2002';
+
+        // Remove category logic from saveMemo
+        const origSaveMemo2 = saveMemo;
+        saveMemo = async function() {
+            try {
+                const title = document.getElementById('memo-title').value;
+                const content = document.getElementById('memo-content').value;
+                if (!title) {
+                    alert('タイトルは必須です');
+                    return;
+                }
+                const location = await getCurrentLocation();
+                const memo = {
+                    id: Date.now(),
+                    title,
+                    content,
+                    location,
+                    timestamp: new Date().toISOString(),
+                    fileId: getCurrentFileId()
+                };
+                memos.push(memo);
+                localStorage.setItem('globeMemos', JSON.stringify(memos));
+                updateMemoList();
+                cancelMemo();
+                alert('メモを保存しました！');
+            } catch (error) {
+                console.error('メモの保存に失敗:', error);
+                alert('位置情報の取得に失敗しました。\n' +
+                      '1. ブラウザの位置情報の設定を確認してください\n' +
+                      '2. GPSが有効になっているか確認してください\n' +
+                      '3. インターネット接続を確認してください');
+            }
+        };
+  </script>
+</body>
+</html>
